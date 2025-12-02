@@ -957,8 +957,6 @@ file delete -force test.db
 # close database
 # open normally providing key via pragma verify
 # correct key works
-sqlite3_shutdown
-sqlite3_config_uri 1
 do_test uri-key {
   sqlite_orig db file:test.db?a=a&key=testkey&c=c
 
@@ -996,8 +994,6 @@ do_test uri-key-2 {
 } {1 {file is not a database}}
 db close
 file delete -force test.db
-sqlite3_shutdown
-sqlite3_config_uri 0
 
 finish_test
 
