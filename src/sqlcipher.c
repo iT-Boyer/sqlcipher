@@ -2626,6 +2626,13 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
       sqlcipher_vdbe_return_string(pParse, "cipher_fips_status", fips_mode_status, P4_DYNAMIC);
     }
   } else
+  if( sqlite3_stricmp(zLeft, "cipher_status")== 0 && !zRight ){
+    if(ctx && ctx->error == SQLITE_OK) {
+      sqlcipher_vdbe_return_string(pParse, "cipher_status", "1", P4_TRANSIENT);
+    } else {
+      sqlcipher_vdbe_return_string(pParse, "cipher_status", "0", P4_TRANSIENT);
+    }
+  } else
   if( sqlite3_stricmp(zLeft, "cipher_store_pass")==0 && zRight ) {
     if(ctx) {
       char *deprecation = "PRAGMA cipher_store_pass is deprecated, please remove from use";

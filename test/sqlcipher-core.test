@@ -995,5 +995,84 @@ do_test uri-key-2 {
 db close
 file delete -force test.db
 
+# test cipher_status reports encrypted for database
+do_test cipher-status-encrypted {
+  sqlite_orig db test.db
+
+  execsql {
+    PRAGMA key = 'test';
+    PRAGMA cipher_status;
+  }
+
+} {ok 1}
+db close
+file delete -force test.db
+
+# test cipher_status reports not-encrypted for plaintext database
+do_test cipher-status-plaintext {
+  sqlite_orig db test.db
+
+  execsql {
+    PRAGMA cipher_status;
+  }
+
+} {0}
+db close
+file delete -force test.db
+
+# test cipher_status reports encrypted for attached database
+# when main database is plaintext and attached database is
+# keyed
+do_test cipher-status-attached-encrypted {
+  sqlite_orig db test.db
+
+  execsql {
+    PRAGMA cipher_status;
+    ATTACH DATABASE 'test2.db' AS test2 KEY 'test';
+    PRAGMA test2.cipher_status;
+    DETACH DATABASE test2;
+  }
+
+} {0 1}
+db close
+file delete -force test.db
+file delete -force test2.db
+
+# test cipher_status reports plaintext for attached database
+# when main database is keyed and attached database is not
+do_test cipher-status-attached-plaintext {
+  sqlite_orig db test.db
+
+  execsql {
+    PRAGMA KEY = 'test';
+    PRAGMA cipher_status;
+    ATTACH DATABASE 'test2.db' AS test2 KEY '';
+    PRAGMA test2.cipher_status;
+    DETACH DATABASE test2;
+  }
+
+} {ok 1 0}
+db close
+file delete -force test.db
+file delete -force test2.db
+
+# test cipher_status reports unencrypted if key derivation
+# and operation fails
+setup test.db "'testkey'"
+do_test cipher-status-badkey {
+  sqlite_orig db test.db
+
+  catchsql {
+    PRAGMA key = 'test';
+    SELECT count(*) FROM sqlite_master;
+  }
+  execsql {
+    PRAGMA cipher_status;
+  }
+
+} {0}
+db close
+file delete -force test.db
+
 finish_test
 
