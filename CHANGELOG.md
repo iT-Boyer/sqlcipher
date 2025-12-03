@@ -1,7 +1,17 @@
 # SQLCipher Change Log
 Notable changes to this project are documented in this file.
 
-## [4.12.0] - (? 2025 - [4.12.0 changes])
+## [4.12.0] - (December 2025 - [4.12.0 changes])
+- Updates baseline to SQLite 3.51.1
+- Adds `PRAGMA cipher_status` so applications can verify a database handle is using encryption
+- Improves guards against key/rekey/attach misuse
+- Adds criteria for `PRAGMA cipher_migrate` tests
+- Fixes check for `__has_feature` macro to separate it from use
+- Fixes CHANGELOG.md markdown formatting, typos, and inline code snippets
+- Fixes conditional in SQLCipher pragma handling
+- Removes deprecated providers for LibTomCrypt and NSS
+- Removes unnecessary shutdown and URI config changes in core tests
+- Ensures all test suite database handles are closed before delete
 
 ## [4.11.0] - (October 2025 - [4.11.0 changes])
 - Converts log output to UTF-16 when writing to stdout or stderr on Windows
