@@ -1,7 +1,9 @@
 # SQLCipher Change Log
 Notable changes to this project are documented in this file.
 
-## [4.13.0] - (? - [4.13.0 changes])
+## [4.13.0] - (January 2026 - [4.13.0 changes])
+- Updates baseline to SQLite 3.51.2
+- Corrects encoding for `sqlcipher_export()` function registration
 
 ## [4.12.0] - (December 2025 - [4.12.0 changes])
 - Updates baseline to SQLite 3.51.1
