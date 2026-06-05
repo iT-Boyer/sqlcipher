@@ -201,16 +201,46 @@ struct private_block {
 /* implementation of simple, fast PSRNG function using xoshiro256++ (XOR/shift/rotate)
  * https://prng.di.unimi.it/ under the public domain via https://prng.di.unimi.it/xoshiro256plusplus.c
  * xoshiro is NEVER used for any cryptographic functions as CSPRNG. It is solely used for
- * generating random data for testing, debugging, and forensic purposes (overwriting memory segments) */
-static volatile uint64_t xoshiro_s[4];
+ * generating random data for testing, debugging, and forensic purposes (overwriting memory segments).
+ * this implementation makes three minor modifications from the stock xoshiro implementation:
+ * 1. the xoshiro state is thread local
+ * 2. xoshiro_next() checks whether the thread local state has been initialized, and if no
+ *    it seeds then
+ * 3. the recommended splitmix64 is used based on the thread local state address to seed (rather
+ *    than from an strong external source). this is again ok because it is primarily used for fast
+ *    anti-forensic spray */
+
+#if defined(_MSC_VER)
+static __declspec(thread) volatile uint64_t xoshiro_s[4];
+#else
+static __thread volatile uint64_t xoshiro_s[4];
+#endif
+
+/* splitmix64 is recommended as the seed generator for xoshiro
+ * based on public domain implementation at https://prng.di.unimi.it/splitmix64.c */
+static uint64_t splitmix64(uint64_t *x) {
+  uint64_t z = (*x += 0x9e3779b97f4a7c15ULL);
+  z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
+  z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
+  return z ^ (z >> 31);
+}
 
 static inline uint64_t xoshiro_rotl(const uint64_t x, int k) {
   return (x << k) | (x >> (64 - k));
 }
 
 uint64_t xoshiro_next(void) {
-  volatile uint64_t result = xoshiro_rotl(xoshiro_s[0] + xoshiro_s[3], 23) + xoshiro_s[0];
-  volatile uint64_t t = xoshiro_s[1] << 17;
+  volatile uint64_t result, t;
+  /* if the state has not been initialized (all zeros), seed */
+  if(!(xoshiro_s[0] | xoshiro_s[1] | xoshiro_s[2] | xoshiro_s[3])) {
+    uint64_t a = (uint64_t)(uintptr_t) &xoshiro_s;
+    xoshiro_s[0] = splitmix64(&a);
+    xoshiro_s[1] = splitmix64(&a);
+    xoshiro_s[2] = splitmix64(&a);
+    xoshiro_s[3] = splitmix64(&a);
+  }
+  result = xoshiro_rotl(xoshiro_s[0] + xoshiro_s[3], 23) + xoshiro_s[0];
+  t = xoshiro_s[1] << 17;
 
   xoshiro_s[2] ^= xoshiro_s[0];
   xoshiro_s[3] ^= xoshiro_s[1];
@@ -940,10 +970,6 @@ void *sqlcipher_malloc(sqlite3_uint64 size) {
     block = block->next;
   }
 
-  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: leaving SQLCIPHER_MUTEX_MEM", __func__);
-  sqlite3_mutex_leave(sqlcipher_mutex(SQLCIPHER_MUTEX_MEM));
-  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: left SQLCIPHER_MUTEX_MEM", __func__);
-
   /* If we were unable to locate a free block large enough to service the request, the fallback
      behavior will simply attempt to allocate additional memory using malloc. */
   if(alloc == NULL) {
@@ -961,6 +987,10 @@ void *sqlcipher_malloc(sqlite3_uint64 size) {
     private_heap_allocs++;
     sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MEMORY, "%s allocated %u bytes on private heap at %p", __func__, size, alloc);
   }
+
+  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: leaving SQLCIPHER_MUTEX_MEM", __func__);
+  sqlite3_mutex_leave(sqlcipher_mutex(SQLCIPHER_MUTEX_MEM));
+  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: left SQLCIPHER_MUTEX_MEM", __func__);
 
   return alloc;
 }
@@ -1009,10 +1039,6 @@ void sqlcipher_free(void *mem, sqlite3_uint64 sz) {
     block = block->next;
   }
 
-  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: leaving SQLCIPHER_MUTEX_MEM", __func__);
-  sqlite3_mutex_leave(sqlcipher_mutex(SQLCIPHER_MUTEX_MEM));
-  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: left SQLCIPHER_MUTEX_MEM", __func__);
-
   /* If the memory address couldn't be found in the private heap
      then it was allocated by the fallback mechanism and should
      be deallocated with free() */
@@ -1023,6 +1049,11 @@ void sqlcipher_free(void *mem, sqlite3_uint64 sz) {
     private_heap_used -= block_size;
     sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MEMORY, "%s freed %u bytes (%u total) on private heap at %p", __func__, sz, block_size, mem);
   }
+
+  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: leaving SQLCIPHER_MUTEX_MEM", __func__);
+  sqlite3_mutex_leave(sqlcipher_mutex(SQLCIPHER_MUTEX_MEM));
+  sqlcipher_log(SQLCIPHER_LOG_TRACE, SQLCIPHER_LOG_MUTEX, "%s: left SQLCIPHER_MUTEX_MEM", __func__);
+
 }
 
 int sqlcipher_register_provider(sqlcipher_provider *p) {
