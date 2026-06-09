@@ -920,7 +920,7 @@ static void sqlcipher_internal_free(void *ptr, sqlite_uint64 sz) {
   */
 static void* sqlcipher_internal_malloc(sqlite_uint64 sz) {
   void *ptr;
-  ptr = sqlite3_malloc(sz);
+  ptr = sqlite3_malloc64(sz);
   sqlcipher_memset(ptr, 0, sz);
   sqlcipher_mlock(ptr, sz);
   return ptr;
@@ -930,7 +930,7 @@ void *sqlcipher_malloc(sqlite3_uint64 size) {
   void *alloc = NULL;
   private_block *block = NULL, *split = NULL;
 
-  if(size < 1) return NULL;
+  if(size < 1 || size > SQLITE_MAX_LENGTH) return NULL;
 
   size = SQLCIPHER_PRIVATE_HEAP_ROUNDUP(size);
 
@@ -1320,7 +1320,7 @@ static int sqlcipher_cipher_ctx_set_pass(cipher_ctx *ctx, const void *zKey, int 
   ctx->pass = NULL;
   ctx->pass_sz = 0;
 
-  if(zKey && nKey) { /* if new password is provided, copy it */
+  if(zKey && nKey > 0) { /* if new password is provided, copy it */
     ctx->pass_sz = nKey;
     ctx->pass = sqlcipher_malloc(nKey);
     if(ctx->pass == NULL) return SQLITE_NOMEM;
@@ -3430,7 +3430,7 @@ int sqlcipherCodecAttach(sqlite3* db, int nDb, const void *zKey, int nKey) {
   }
 
   /* error pKey is not null and nKey is > 0 */
-  if(!(nKey && zKey)) {
+  if(!(nKey > 0 && zKey)) {
     sqlcipher_log(SQLCIPHER_LOG_ERROR, SQLCIPHER_LOG_CORE, "%s: no key", __func__);
     return SQLITE_MISUSE;
   }
@@ -3569,6 +3569,9 @@ int sqlite3_key(sqlite3 *db, const void *pKey, int nKey) {
 int sqlite3_key_v2(sqlite3 *db, const char *zDb, const void *pKey, int nKey) {
   int db_index = sqlcipher_find_db_index(db, zDb);
   sqlcipher_log(SQLCIPHER_LOG_DEBUG, SQLCIPHER_LOG_CORE, "%s: db=%p zDb=%s db_index=%d", __func__, db, zDb, db_index);
+  if(pKey && nKey < 0) {
+    nKey = strlen(pKey);
+  }
   return sqlcipherCodecAttach(db, db_index, pKey, nKey);
 }
 
@@ -3590,12 +3593,16 @@ int sqlite3_rekey(sqlite3 *db, const void *pKey, int nKey) {
 int sqlite3_rekey_v2(sqlite3 *db, const char *zDb, const void *pKey, int nKey) {
   sqlcipher_log(SQLCIPHER_LOG_DEBUG, SQLCIPHER_LOG_CORE, "sqlite3_rekey_v2: db=%p zDb=%s", db, zDb);
 
+  if(pKey && nKey < 0) {
+    nKey = strlen(pKey);
+  }
+
   if(!sqlcipher_init) {
     sqlcipher_log(SQLCIPHER_LOG_ERROR, SQLCIPHER_LOG_CORE, "%s: sqlcipher not initialized %d",__func__, sqlcipher_init_error);
     return sqlcipher_init_error;
   }
 
-  if(db && pKey && nKey) {
+  if(db && pKey && nKey > 0) {
     int db_index = sqlcipher_find_db_index(db, zDb);
     struct Db *pDb = NULL;
 
