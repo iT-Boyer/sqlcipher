@@ -263,13 +263,13 @@ static int sqlcipher_ltc_kdf(
   unsigned long outlen = key_sz;
 
   switch(algorithm) {
-    case SQLCIPHER_HMAC_SHA1:
+    case SQLCIPHER_PBKDF2_HMAC_SHA1:
       hash_idx = find_hash("sha1");
       break;
-    case SQLCIPHER_HMAC_SHA256:
+    case SQLCIPHER_PBKDF2_HMAC_SHA256:
       hash_idx = find_hash("sha256");
       break;
-    case SQLCIPHER_HMAC_SHA512:
+    case SQLCIPHER_PBKDF2_HMAC_SHA512:
       hash_idx = find_hash("sha512");
       break;
     default:
