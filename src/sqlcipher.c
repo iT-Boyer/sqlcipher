@@ -482,7 +482,6 @@ int sqlcipher_extra_init(const char* arg) {
   if(sqlcipher_init) {
     /* if this init routine already completed successfully return immediately */
     sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
-    mutex_held = 0;
     return SQLITE_OK;
   }
 
@@ -608,7 +607,6 @@ int sqlcipher_extra_init(const char* arg) {
 
   /* leave the master mutex so we can proceed with auto extension registration */
   sqlite3_mutex_leave(sqlite3_mutex_alloc(SQLITE_MUTEX_STATIC_MASTER));
-  mutex_held = 0;
 
   /* finally, extension registration occurs outside of the mutex because it is
    * uses SQLITE_MUTEX_STATIC_MASTER itself */
@@ -2016,7 +2014,6 @@ cleanup:
 
 static int sqlcipher_codec_ctx_integrity_check(codec_ctx *ctx, Parse *pParse, char *column) {
   Pgno page = 1;
-  int rc = 0;
   char *result;
   unsigned char *hmac_out = NULL;
   sqlite3_file *fd = sqlite3PagerFile(sqlite3BtreePager(ctx->pBt));
@@ -2038,13 +2035,13 @@ static int sqlcipher_codec_ctx_integrity_check(codec_ctx *ctx, Parse *pParse, ch
     goto cleanup;
   }
 
-  if((rc = sqlcipher_codec_key_derive(ctx)) != SQLITE_OK) {
+  if(sqlcipher_codec_key_derive(ctx) != SQLITE_OK) {
     sqlite3VdbeAddOp4(v, OP_String8, 0, 1, 0, "unable to derive keys", P4_TRANSIENT);
     sqlite3VdbeAddOp2(v, OP_ResultRow, 1, 1);
     goto cleanup;
   }
 
-  if((rc = sqlite3OsFileSize(fd, &file_sz)) != SQLITE_OK) {
+  if(sqlite3OsFileSize(fd, &file_sz) != SQLITE_OK) {
     sqlite3VdbeAddOp4(v, OP_String8, 0, 1, 0, "failed to determine file size", P4_TRANSIENT);
     sqlite3VdbeAddOp2(v, OP_ResultRow, 1, 1);
     goto cleanup;
@@ -3087,7 +3084,6 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
   }else 
   if( sqlite3_stricmp(zLeft,"cipher_default_hmac_algorithm")==0 ){
     if(zRight) {
-      rc = SQLITE_OK;
       if(sqlite3_stricmp(zRight, SQLCIPHER_HMAC_SHA1_LABEL) == 0) {
         default_hmac_algorithm = SQLCIPHER_HMAC_SHA1;
       } else if(sqlite3_stricmp(zRight, SQLCIPHER_HMAC_SHA256_LABEL) == 0) {
@@ -3130,7 +3126,6 @@ int sqlcipher_codec_pragma(sqlite3* db, int iDb, Parse *pParse, const char *zLef
   }else 
   if( sqlite3_stricmp(zLeft,"cipher_default_kdf_algorithm")==0 ){
     if(zRight) {
-      rc = SQLITE_OK;
       if(sqlite3_stricmp(zRight, SQLCIPHER_PBKDF2_HMAC_SHA1_LABEL) == 0) {
         default_kdf_algorithm = SQLCIPHER_PBKDF2_HMAC_SHA1;
       } else if(sqlite3_stricmp(zRight, SQLCIPHER_PBKDF2_HMAC_SHA256_LABEL) == 0) {
@@ -3807,7 +3802,7 @@ int sqlite3_rekey_v2(sqlite3 *db, const char *zDb, const void *pKey, int nKey) {
       /* if commit was successful commit and copy the rekey data to current key, else rollback to release locks */
       if(rc == SQLITE_OK) { 
         sqlcipher_log(SQLCIPHER_LOG_DEBUG, SQLCIPHER_LOG_CORE, "sqlite3_rekey_v2: committing");
-        rc = sqlite3BtreeCommit(pDb->pBt); 
+        sqlite3BtreeCommit(pDb->pBt);
         sqlcipher_codec_key_copy(ctx, CIPHER_WRITE_CTX);
       } else {
         sqlcipher_log(SQLCIPHER_LOG_DEBUG, SQLCIPHER_LOG_CORE, "sqlite3_rekey_v2: rollback");
